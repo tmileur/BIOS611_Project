@@ -1,8 +1,137 @@
 ---
-title: 'BIOS611 Project Report'
-author: 'Trevor Mileur'
-output: PDF_FINAL
+title: "BIOS611 Project Report"
+author: "Trevor Mileur"
+output:
+  pdf_document:
+    latex_engine: xelatex
 ---
 
-Exploring WDFY4 Interacting Proteins
-LINK: https://www.science.org/doi/10.1126/science.aat5030
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Loading necessary libraries
+library(tidyverse)
+library(cluster)
+library(factoextra)
+library(pheatmap)
+library(dendextend)
+library(openxlsx)
+library(ggplot2)
+library(knitr)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Setting global chunk options
+knitr::opts_chunk$set(fig.width = 7, fig.height = 5, out.width = "90%", echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+# BIOS 611 Project: Identifying WDFY4 and BEACH Domain Containing Proteins as Effectors of RAS GTPases
+T-cell receptor (TCR) engagement with peptides presented by MHC molecules on antigen-presenting cells (APCs) drives antigen-specific T-cell activation against viral and tumor antigens. Professional APCs rely on endocytic trafficking to sort, process, and present antigens via MHC molecules. The WD repeat- and FYVE domain–containing protein 4 (WDFY4) is essential for MHC-I–mediated cross-presentation of cell- and viral-associated antigens; however, its structure and mechanism remain uncharacterized.
+
+To identify proteins that may interface with WDFY4, I utilized AlphaFold2 Multimer to screen 144 unique proteins against each of WDFY4's six domains. Intriguingly, I identified several hits suggesting that RAS GTPases interact with the BEACH domain of WDFY4. To systematically interrogate these potential interactions, I predicted the structures of each of the nine known BEACH domains in the human proteome and ran an AlphaFold2 Multimer screen against all known RAS GTPases.
+
+The analysis that follows in this report is an attempt to identify which RAS GTPases are most likely to interact with a given BEACH domain. This information will guide which BEACH domains and RAS GTPases I will purify in the lab for empirical investigation. These initial results suggest a relationship between BEACH domains and RABs associated with recycling endosomes, supporting one of my hypotheses: WDFY4 is involved in regulating retrograde trafficking of peptide-loaded MHC-I molecules to the surface of APCs. Furthermore, my data is supported by a recent report identifying an ARF1-dependent mechanism for recruiting Lipopolysaccharide-responsive beige-like anchor (LRBA) to RAB4 endosomes.
+
+BEACH Domains: LRBA, LYST, NBEA, NBEAL1, NBEAL2, NSMAF, WDFY3, WDFY4, WDR81 
+
+# About the Data
+The results of the screen are included in /Data/BEACHxRAS.xlsx. These results include the model confidence scores from the AlphaFold2 Multimer screen, wherein computational prediction of protein-protein interfaces was performed for nine human BEACH domains against 147 RAS superfamily GTPases.
+
+The confidence score ranges from 0 to 1, where:
+\begin{itemize}
+    \item 0 indicates a poor interface prediction.
+    \item 1 indicates a strong interface prediction.
+\end{itemize}
+In general, a cutoff of 0.75 or greater is used to determine interactions that are likely to occur in nature.
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Load the dataset
+file_path <- "./Data/BEACHxRAS.xlsx"
+data <- readxl::read_excel(file_path, sheet = "Sheet1") %>% as_tibble()
+
+# Select relevant columns and drop NA
+BEACH_columns <- c("LRBA_MC", "LYST_MC", "NBEA_MC", "NBEAL1_MC", "NBEAL2_MC", "NSMAF_MC", "WDFY3_MC", "WDFY4_MC", "WDR81_MC")
+RAS_data <- data %>% select(RAS, all_of(BEACH_columns)) %>% drop_na()
+```
+
+\newpage
+
+# Overlapping Interactions of BEACH Domains with RAS Family Proteins
+Pairwise comparisons were performed to identify shared RAS proteins with scores \(\geq\) 0.75 for each pair of BEACH domains. When considering which BEACH domains to purify in the lab, overlapping interactions will be critical to our study.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Load shared interaction results
+shared_interactions <- read.csv("comparison_matrix_summary.csv", row.names = 1)  # Set row names as "group1"
+
+# Remove `_MC` from row names and column names
+rownames(shared_interactions) <- gsub("_MC", "", rownames(shared_interactions))
+colnames(shared_interactions) <- gsub("_MC", "", colnames(shared_interactions))
+
+# Display the table
+kable(shared_interactions, caption = "Pairwise Shared Interactions Between BEACH Domains")
+```
+
+\newpage
+
+# PCA Analysis of BEACH Domains Based on RAS Interactions
+Principal Component Analysis (PCA) was performed to explore the variance in the BEACH domains of RAS proteins. LYST and NBEA are the most divergent from WDFY3 and WDFY4 in their interactions. 
+
+\vspace{1cm}
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# PCA Visualization
+knitr::include_graphics("PCA_BEACH_domains.png")
+```
+
+
+
+\vspace{4cm}
+
+
+
+
+
+# Heatmap Analysis for RAS Families
+Heatmaps were created for each RAS Family and for RAB proteins.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Example family-specific heatmap
+knitr::include_graphics("RAS_Family_Heatmaps/RAB_heatmap.png")
+```
+
+# Individual Barplots for BEACH Domains by RAS Family
+Barplots were generated to visualize scores of each BEACH domain across RAS families. Here's an example for WDFY4 showing the ARF proteins. 
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Example barplot
+knitr::include_graphics("RAS_BEACH_Barplots/ARF_WDFY4_MC_barplot.png")
+```
+
+\newpage
+
+
+# Top RAB and ARF Proteins for Empirical Analysis
+These lists identify candidate RAS family proteins to study the interactions with BEACH domains. Although we will mostly likely start with the top three RAB and ARF proteins as targets.
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Load top RAB and ARF proteins
+top_rab <- read.xlsx("Top_10_RAB_ARF_Proteins.xlsx", sheet = "Top_10_RAB")
+top_arf <- read.xlsx("Top_10_RAB_ARF_Proteins.xlsx", sheet = "Top_10_ARF")
+
+# Exclude Columns
+top_rab_filtered <- top_rab %>%
+  select(-any_of(c("Uniprot", "Function", "RAS.Family", "BEACH_Avg"))) %>%
+  rename_with(~ gsub("_MC", "", .), .cols = everything())
+
+top_arf_filtered <- top_arf %>%
+  select(-any_of(c("Uniprot", "Function", "RAS.Family", "BEACH_Avg"))) %>%
+  rename_with(~ gsub("_MC", "", .), .cols = everything())
+
+# Display filtered tables
+kable(top_rab_filtered, caption = "Top 10 RAB Proteins (Filtered)")
+kable(top_arf_filtered, caption = "Top 10 ARF Proteins (Filtered)")
+```
+
+# Conclusion:
+In my initial screen of BEACH domains as effectors of RAS family proteins, I identified several candidates. This is likely due to the sequence conservation among RAS family proteins and the sensitivity of the AlphaFold2 Multimer approach. I proposed this project in June 2024 as a follow-up to independent research I began in 2018. Intriguingly, two recent papers by Szentgyörgyi et al. (http://doi.org/10.1083/jcb.202401167) and Pankiv et al. (http://doi.org/10.1083/jcb.202408173) support my main hypotheses: (1) WDFY4 is tightly coupled to the endocytic pathway, and (2) BEACH domains are effectors of RAS family proteins.
+
+# Future Directions:
+This data will be utilized to de-risk the project moving forward. I will use this data to identify the best candidates for structurally determining the interactions between BEACH domains and RAS family proteins.
